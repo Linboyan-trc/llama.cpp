@@ -71,21 +71,26 @@ class MainActivity(
         val extFilesDir = getExternalFilesDir(null)
 
         val models = listOf(
+//            Downloadable(
+//                "Phi-2 7B (Q4_0, 1.6 GiB)",
+//                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf?download=true"),
+//                File(extFilesDir, "phi-2-q4_0.gguf"),
+//            ),
+//            Downloadable(
+//                "TinyLlama 1.1B (f16, 2.2 GiB)",
+//                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf?download=true"),
+//                File(extFilesDir, "tinyllama-1.1-f16.gguf"),
+//            ),
+//            Downloadable(
+//                "Phi 2 DPO (Q3_K_M, 1.48 GiB)",
+//                Uri.parse("https://huggingface.co/TheBloke/phi-2-dpo-GGUF/resolve/main/phi-2-dpo.Q3_K_M.gguf?download=true"),
+//                File(extFilesDir, "phi-2-dpo.Q3_K_M.gguf")
+//            ),
             Downloadable(
-                "Phi-2 7B (Q4_0, 1.6 GiB)",
-                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf?download=true"),
-                File(extFilesDir, "phi-2-q4_0.gguf"),
-            ),
-            Downloadable(
-                "TinyLlama 1.1B (f16, 2.2 GiB)",
-                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf?download=true"),
-                File(extFilesDir, "tinyllama-1.1-f16.gguf"),
-            ),
-            Downloadable(
-                "Phi 2 DPO (Q3_K_M, 1.48 GiB)",
-                Uri.parse("https://huggingface.co/TheBloke/phi-2-dpo-GGUF/resolve/main/phi-2-dpo.Q3_K_M.gguf?download=true"),
-                File(extFilesDir, "phi-2-dpo.Q3_K_M.gguf")
-            ),
+                "TinyLlama 1.1B (int4, 669 MB)",
+                Uri.parse("https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf?download=true"),  // 本地路径也可以写成 file://
+                File(extFilesDir, "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")  // 保存/使用路径
+            )
         )
 
         setContent {
