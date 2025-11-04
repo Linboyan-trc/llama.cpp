@@ -31,6 +31,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
@@ -128,10 +130,12 @@ fun MainCompose(
         val scrollState = rememberLazyListState()
 
         Box(modifier = Modifier.weight(1f)) {
-            LazyColumn(state = scrollState) {
+            LazyColumn(
+                state = scrollState,
+                modifier = Modifier.fillMaxSize()
+            ) {
                 items(viewModel.messages.size) { index ->
                     val message = viewModel.messages[index]
-                    // 根据 index 奇偶设置水平排列
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -148,7 +152,19 @@ fun MainCompose(
                     }
                 }
             }
+
+            // ✅ 实时滚动到底部
+            LaunchedEffect(viewModel.messages) {
+                snapshotFlow { viewModel.messages.lastOrNull() }
+                    .collect { _ ->
+                        if (viewModel.messages.isNotEmpty()) {
+                            // 最后一条消息不断追加时也滚动到底部
+                            scrollState.animateScrollToItem(viewModel.messages.size - 1)
+                        }
+                    }
+            }
         }
+
         OutlinedTextField(
             value = viewModel.message,
             onValueChange = { viewModel.updateMessage(it) },
