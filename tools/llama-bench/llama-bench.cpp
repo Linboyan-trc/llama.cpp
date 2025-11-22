@@ -1993,6 +1993,10 @@ static std::unique_ptr<printer> create_printer(output_formats format) {
     GGML_ABORT("fatal error");
 }
 
+// 1. 测速
+// 1.1 这里测速针对n_prompt = 512, n_gen = 0
+// 1.1 这里测速针对n_prompt = 0, n_gen = 128
+// 1.1 分开测速，由于长度固定，所以速度直接用128/计时器的时间，不适合用来实时测llama-cli的生成速度
 int main(int argc, char ** argv) {
     // 1. 设置输出的时候，用UTF-8去解码机器码
     // 1.1 也就是说setlocale(LC_CTYPE, ".UTF-8");让程序进行printf等输出操作的使用，用utf-8去解码编译好的机器码，获得正确的输出显示
@@ -2151,6 +2155,7 @@ int main(int argc, char ** argv) {
         }
 
         // 8.8 正式测试循环
+        // 8.8.1 params.reps = 5
         for (int i = 0; i < params.reps; i++) {
             // 8.8.1 清理上下文内存
             llama_memory_clear(llama_get_memory(ctx), false);

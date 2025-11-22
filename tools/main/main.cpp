@@ -84,6 +84,7 @@ static void sigint_handler(int signo) {
 #endif
 
 int main(int argc, char ** argv) {
+    // 1. 参数解析与初始化
     common_params params;
     g_params = &params;
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_MAIN, print_usage)) {
@@ -96,9 +97,11 @@ int main(int argc, char ** argv) {
 
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
+    // 2. 控制台与交互设置
     console::init(params.simple_io, params.use_color);
     atexit([]() { console::cleanup(); });
 
+    // 3. 模型加载与后端初始化
     if (params.embedding) {
         LOG_ERR("************\n");
         LOG_ERR("%s: please use the 'embedding' tool for embedding calculations\n", __func__);
@@ -152,6 +155,7 @@ int main(int argc, char ** argv) {
     const llama_vocab * vocab = llama_model_get_vocab(model);
     auto chat_templates = common_chat_templates_init(model, params.chat_template);
 
+    // 4. 线程池与优先级设置
     LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__, (int) params.cpuparams.n_threads);
 
     auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
@@ -233,6 +237,7 @@ int main(int argc, char ** argv) {
         LOG_INF("\n");
     }
 
+    // 5. 会话文件处理
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
 
@@ -255,6 +260,7 @@ int main(int argc, char ** argv) {
         }
     }
 
+    // 6. Prompt和Token 处理
     const bool add_bos = llama_vocab_get_add_bos(vocab) && !params.use_jinja;
     if (!llama_model_has_encoder(model)) {
         GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
@@ -316,6 +322,7 @@ int main(int argc, char ** argv) {
     }
 
     // Should not run without any tokens
+    // 7. 推理参数与交互模式设置
     if (!waiting_for_first_input && embd_inp.empty()) {
         if (add_bos) {
             embd_inp.push_back(llama_vocab_bos(vocab));
@@ -407,6 +414,7 @@ int main(int argc, char ** argv) {
     }
 
     // ctrl+C handling
+    // 8. 信号处理
     {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
         struct sigaction sigint_action;
@@ -562,7 +570,7 @@ int main(int argc, char ** argv) {
         embd_inp.push_back(decoder_start_token_id);
     }
 
-    // 1. 循环推理
+    // 9. 推理主循环
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (!embd.empty()) {
@@ -982,6 +990,7 @@ int main(int argc, char ** argv) {
     LOG("\n\n");
     common_perf_print(ctx, smpl);
 
+    // 10. 资源释放与退出
     common_sampler_free(smpl);
 
     llama_backend_free();
