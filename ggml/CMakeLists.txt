@@ -1,7 +1,10 @@
+# 1. cmake版本和项目名
+# 1.1 构建该项目所需的最低CMake版本为3.14
+# 1.2 项目名称是"ggml"，使用的语言包括：C, C++, ASM汇编
 cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories.
 project("ggml" C CXX ASM)
 
-### GGML Version
+# 2. GGML的版本是0.9.4
 set(GGML_VERSION_MAJOR 0)
 set(GGML_VERSION_MINOR 9)
 set(GGML_VERSION_PATCH 4)

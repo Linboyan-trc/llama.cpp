@@ -1,16 +1,23 @@
-#pragma once
+#pragma once // 1. 这个pragma once用来代替"#ifndef MY_HEADER_H" + "#define MY_HEADER_H" + "#endif", 更简洁的确保本头文件被引用的时候只被引用一次
 
-#include "ggml.h"
+#include "ggml.h" // 2. 引用"ggml.h"
 
-#ifdef  __cplusplus
+#ifdef  __cplusplus // 3. 使用C++编译器的时候编译器内置这个宏，使得函数编译后不被重命名，其实就是关闭函数重载功能
 extern "C" {
 #endif
 
+// 4. 给结构体指针别名
+// 4.1 语法是typedef <value_type> <alias>
+// 4.2 这里<value_type>是struct ggml_backend_buffer_type *，结构体指针
+// 4.3 <alias>是ggml_backend_buffer_type_t
+// 4.3 而struct ggml_backend_buffer_type在其他地方
 typedef struct ggml_backend_buffer_type * ggml_backend_buffer_type_t;
 typedef struct      ggml_backend_buffer * ggml_backend_buffer_t;
 typedef struct             ggml_backend * ggml_backend_t;
 
 // Tensor allocator
+// 5. 声明一个结构体
+// 5.1 有4个成员变量，其中size_t在64位操作系统上是unsigned long，8 byte
 struct ggml_tallocr {
     ggml_backend_buffer_t buffer;
     void * base;
@@ -18,6 +25,12 @@ struct ggml_tallocr {
     size_t offset;
 };
 
+// 6. 声明一个函数
+// 6.1 语法是<macro> <return_value_type> <func_name>(<arguments>)
+// 6.2 这里<macro>是GGML_API
+// 6.2 <return_value_type>是struct ggml_tallocr
+// 6.2 <func_name>是ggml_tallocr_new
+// 6.2 <arguments>是ggml_backend_buffer_t buffer
 GGML_API struct ggml_tallocr ggml_tallocr_new(ggml_backend_buffer_t buffer);
 GGML_API enum ggml_status    ggml_tallocr_alloc(struct ggml_tallocr * talloc, struct ggml_tensor * tensor);
 

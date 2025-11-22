@@ -1994,13 +1994,16 @@ static std::unique_ptr<printer> create_printer(output_formats format) {
 }
 
 int main(int argc, char ** argv) {
-    // try to set locale for unicode characters in markdown
+    // 1. 设置输出的时候，用UTF-8去解码机器码
+    // 1.1 也就是说setlocale(LC_CTYPE, ".UTF-8");让程序进行printf等输出操作的使用，用utf-8去解码编译好的机器码，获得正确的输出显示
     setlocale(LC_CTYPE, ".UTF-8");
 
+    // 1.2 如果NDEBUG宏没有声明，也就是不是"No-Debug"，就默认是Debug模式，会有assert()来检查程序
 #if !defined(NDEBUG)
     fprintf(stderr, "warning: asserts enabled, performance may be affected\n");
 #endif
 
+    // 1.3 Mac上不声明_MSC_VER宏，调试的时候也不会有__OPTIMIZE__宏，所以是debug模式
 #if (defined(_MSC_VER) && defined(_DEBUG)) || (!defined(_MSC_VER) && !defined(__OPTIMIZE__))
     fprintf(stderr, "warning: debug build, performance may be affected\n");
 #endif
@@ -2009,11 +2012,13 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "warning: sanitizer enabled, performance may be affected\n");
 #endif
 
-    // initialize backends
+    // 2. 初始化后端
     ggml_backend_load_all();
 
+    // 3. 解析命令行参数
     cmd_params params = parse_cmd_params(argc, argv);
 
+    // 4. 获取CPU后端和线程池函数指针
     auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
     if (!cpu_dev) {
         fprintf(stderr, "%s: error: CPU backend is not loaded\n", __func__);
@@ -2023,7 +2028,7 @@ int main(int argc, char ** argv) {
     auto * ggml_threadpool_new_fn = (decltype(ggml_threadpool_new) *) ggml_backend_reg_get_proc_address(cpu_reg, "ggml_threadpool_new");
     auto * ggml_threadpool_free_fn = (decltype(ggml_threadpool_free) *) ggml_backend_reg_get_proc_address(cpu_reg, "ggml_threadpool_free");
 
-    // initialize llama.cpp
+    // 5. 初始化llama.cpp库
     if (!params.verbose) {
         llama_log_set(llama_null_log_callback, NULL);
     }
@@ -2032,7 +2037,7 @@ int main(int argc, char ** argv) {
 
     set_process_priority(params.prio);
 
-    // initialize printer
+    // 6. 初始化输出打印器
     std::unique_ptr<printer> p     = create_printer(params.output_format);
     std::unique_ptr<printer> p_err = create_printer(params.output_format_stderr);
 
@@ -2046,19 +2051,26 @@ int main(int argc, char ** argv) {
         p_err->print_header(params);
     }
 
+    // 7. 生成所有参数组合实例
     std::vector<cmd_params_instance> params_instances = get_cmd_params_instances(params);
 
+    // 8. 主测试循环
     llama_model *               lmodel    = nullptr;
     const cmd_params_instance * prev_inst = nullptr;
 
     int  params_idx   = 0;
     auto params_count = params_instances.size();
     for (const auto & inst : params_instances) {
+        // 8.1 进度显示
+        // 8.1 启用了进度显示，输出当前测试进度（第几个/总共多少个）
         params_idx++;
         if (params.progress) {
             fprintf(stderr, "llama-bench: benchmark %d/%zu: starting\n", params_idx, params_count);
         }
-        // keep the same model between tests when possible
+
+        // 8.2 模型加载
+        // 如果当前模型参数与上一次不同，则释放旧模型并加载新模型。
+        // 保证只有参数变化时才重新加载模型，节省时间和资源。
         if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
             if (lmodel) {
                 llama_model_free(lmodel);
@@ -2072,6 +2084,8 @@ int main(int argc, char ** argv) {
             prev_inst = &inst;
         }
 
+        // 8.3 创建新的上下文
+        // 8.3 用当前模型和参数创建新的推理上下文
         llama_context * ctx = llama_init_from_model(lmodel, inst.to_llama_cparams());
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, inst.model.c_str());
@@ -2079,15 +2093,17 @@ int main(int argc, char ** argv) {
             return 1;
         }
 
+        // 8.4 构造测试对象
         test t(inst, lmodel, ctx);
 
         llama_memory_clear(llama_get_memory(ctx), false);
 
-        // cool off before the test
+        // 8.5 冷却延迟
         if (params.delay) {
             std::this_thread::sleep_for(std::chrono::seconds(params.delay));
         }
 
+        // 8.6 线程池创建与绑定
         struct ggml_threadpool_params tpp = ggml_threadpool_params_default(t.n_threads);
         if (!parse_cpu_mask(t.cpu_mask, tpp.cpumask)) {
             fprintf(stderr, "%s: failed to parse cpu-mask: %s\n", __func__, t.cpu_mask.c_str());
@@ -2105,7 +2121,7 @@ int main(int argc, char ** argv) {
 
         llama_attach_threadpool(ctx, threadpool, NULL);
 
-        // warmup run
+        // 8.7 Warmup运行
         if (!params.no_warmup) {
             if (t.n_prompt > 0) {
                 if (params.progress) {
@@ -2130,9 +2146,12 @@ int main(int argc, char ** argv) {
             }
         }
 
+        // 8.8 正式测试循环
         for (int i = 0; i < params.reps; i++) {
+            // 8.8.1 清理上下文内存
             llama_memory_clear(llama_get_memory(ctx), false);
 
+            // 8.8.2 深度推理
             if (t.n_depth > 0) {
                 if (params.progress) {
                     fprintf(stderr, "llama-bench: benchmark %d/%zu: depth run %d/%d\n", params_idx, params_count,
@@ -2145,8 +2164,10 @@ int main(int argc, char ** argv) {
                 }
             }
 
+            // 8.8.3 记录开始时间
             uint64_t t_start = get_time_ns();
 
+            // 8.8.4 prompt测试
             if (t.n_prompt > 0) {
                 if (params.progress) {
                     fprintf(stderr, "llama-bench: benchmark %d/%zu: prompt run %d/%d\n", params_idx, params_count,
@@ -2158,6 +2179,8 @@ int main(int argc, char ** argv) {
                     exit(1);
                 }
             }
+            
+            // 8.8.5 生成测试
             if (t.n_gen > 0) {
                 if (params.progress) {
                     fprintf(stderr, "llama-bench: benchmark %d/%zu: generation run %d/%d\n", params_idx, params_count,
@@ -2170,10 +2193,12 @@ int main(int argc, char ** argv) {
                 }
             }
 
+            // 8.8.6 记录耗时
             uint64_t t_ns = get_time_ns() - t_start;
             t.samples_ns.push_back(t_ns);
         }
 
+        // 8.9 结果输出
         if (p) {
             p->print_test(t);
             fflush(p->fout);
@@ -2184,13 +2209,16 @@ int main(int argc, char ** argv) {
             fflush(p_err->fout);
         }
 
+        // 8.10 性能上下文输出
         llama_perf_context_print(ctx);
 
+        // 8.11 资源释放
         llama_free(ctx);
 
         ggml_threadpool_free_fn(threadpool);
     }
 
+    // 9. 清理资源
     llama_model_free(lmodel);
 
     if (p) {
@@ -2203,5 +2231,6 @@ int main(int argc, char ** argv) {
 
     llama_backend_free();
 
+    // 10. 返回0表示正常退出
     return 0;
 }
