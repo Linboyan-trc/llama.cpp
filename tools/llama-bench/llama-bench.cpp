@@ -2016,6 +2016,10 @@ int main(int argc, char ** argv) {
     ggml_backend_load_all();
 
     // 3. 解析命令行参数
+    // 3.1 对于本程序，argc = 3
+    // 3.2 对于本程序，argv[0] = '/Users/toryn/Remote/llama.cpp/build-mac/bin/llama-bench'
+    // 3.2 对于本程序，argv[1] = '-m'
+    // 3.2 对于本程序，argv[2] = '/Users/toryn/Downloads/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf'
     cmd_params params = parse_cmd_params(argc, argv);
 
     // 4. 获取CPU后端和线程池函数指针
