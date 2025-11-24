@@ -540,6 +540,8 @@ int main(int argc, char ** argv) {
     console::set_display(console::prompt);
     display = params.display_prompt;
 
+    // llama_token就是int32_t，32bit的有符号int
+    // embd就是一个int32的数组
     std::vector<llama_token> embd;
 
     // single-token antiprompts
@@ -573,33 +575,49 @@ int main(int argc, char ** argv) {
     // 9. 推理主循环
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
+        // embd就是本轮输入，比如上一次新生成了1个token，那么本轮embd.size()就是1
+        // 而不是全部的用户输入 + 前序模型输出
         if (!embd.empty()) {
             // Note: (n_ctx - 4) here is to match the logic for commandline prompt handling via
             // --prompt or --file which uses the same value.
+            // n_ctx就是模型上下文容量
+            // max_embd_size是真正的上下文容量，比n_ctx少4个
             int max_embd_size = n_ctx - 4;
 
             // Ensure the input doesn't exceed the context size by truncating embd if necessary.
+            // 当本轮输入embd.size()，也就是(用户输入 或 上一次输出的生成虽然我们就是一次只生成1个token)总长度超过max_embd_size的时候
+            // 要对本轮输入embd.size()要进行截断，阶段方式是丢弃末尾的，只保留[0, max_embd_size-1]位置的token，也就是前max_embd_size个token
+            // 也就是先对本轮输入的长度做限制，是其最多为n_ctx - 4，所有n_past至少会保留4个
             if ((int) embd.size() > max_embd_size) {
                 const int skipped_tokens = (int) embd.size() - max_embd_size;
                 embd.resize(max_embd_size);
 
+                // 并对丢弃了多少个token数量作说明
                 console::set_display(console::error);
                 LOG_WRN("<<input too long: skipped %d token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
                 console::set_display(console::reset);
             }
 
+            // ga_n就是分组的组数
+            // embd.size()的截断仅仅处理了本轮输入的长度，还有缓存的前序输入 + 已有的输出的token要处理
+            // 再对n_past + embd.size()也就是前序内容 + 本轮输入一起做限制
+            /// TODO:
+            // 对于ga_n=1的上下文管理已经清楚，对于ga_n=3的上下文管理需要调试结合具体参数看
             if (ga_n == 1) {
                 // infinite text generation via context shifting
                 // if we run out of context:
                 // - take the n_keep first tokens from the original prompt (via n_past)
                 // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
 
+                // 当ga_n == 1，也就是分组只有1组的时候，采用以下策略
                 if (n_past + (int) embd.size() >= n_ctx) {
+                    // 上下文丢弃策略被禁用，一般也不会开启这个
                     if (!params.ctx_shift){
                         LOG_WRN("\n\n%s: context full and context shift is disabled => stopping\n", __func__);
                         break;
                     }
 
+                    // 生成停止，需要手动设置params.predict = 2才会生效
                     if (params.n_predict == -2) {
                         LOG_WRN("\n\n%s: context full and n_predict == %d => stopping\n", __func__, params.n_predict);
                         break;
@@ -607,24 +625,29 @@ int main(int argc, char ** argv) {
 
                     const int n_left    = n_past - params.n_keep;
                     const int n_discard = n_left/2;
+                    LOG_DBG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n", n_past, n_left, n_ctx, params.n_keep, n_discard);
 
-                    LOG_DBG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
-                            n_past, n_left, n_ctx, params.n_keep, n_discard);
-
-                    llama_memory_seq_rm (mem, 0, params.n_keep            , params.n_keep + n_discard);
-                    llama_memory_seq_add(mem, 0, params.n_keep + n_discard, n_past, -n_discard);
-
+                    // 对于已经在内存中的n_past，保留[0, n_keep]，移除n_past尾部的前一半[n_keep, n_keep + n_discard]
+                    // 然后从把[n_keep + n_discard, n_past]，也就是n_past尾部的后一半，集体往前移动n_discard
+                    // 这两句代码就是保留n_past的[0, n_keep] + [n_keep + n_discard, n_keep + 2 * n_discard]，并且拼接在一起
+                    llama_memory_seq_rm (mem, 0, params.n_keep            ,     params.n_keep + n_discard);
+                    llama_memory_seq_add(mem, 0, params.n_keep + n_discard,     n_past,                     -n_discard);
+                    
+                    // 最终n_past的长度减少了n_discard
+                    // 这种上下文重排不在于充分利用n_ctx的上下文容量，也就是说一开始n_past + embd.size() >= n_ctx，但是重排之后数量可能远小于n_ctx
+                    // 重排的目的是为了精简上下文长度，而继续生成，但是不要求每次都充分利用n_ctx的上下文容量
                     n_past -= n_discard;
 
                     LOG_DBG("after swap: n_past = %d\n", n_past);
-
                     LOG_DBG("embd: %s\n", string_from(ctx, embd).c_str());
-
                     LOG_DBG("clear session path\n");
                     path_session.clear();
                 }
             } else {
                 // context extension via Self-Extend
+                // ga_n是分组组数,
+                // ga_i是起始处理位置下标0，ga_w是每一组的宽度
+                // 保留n_past的[0, ga_i]，对于[ga_i, n_past]分组处理
                 while (n_past >= ga_i + ga_w) {
                     const int ib = (ga_n*ga_i)/ga_w;
                     const int bd = (ga_w/ga_n)*(ga_n - 1);
@@ -648,6 +671,7 @@ int main(int argc, char ** argv) {
             }
 
             // try to reuse a matching prefix from the loaded session instead of re-eval (via n_past)
+            // 用于用户从前几天的历史会话中恢复记录，继续生成
             if (n_session_consumed < (int) session_tokens.size()) {
                 size_t i = 0;
                 for ( ; i < embd.size(); i++) {
@@ -669,7 +693,10 @@ int main(int argc, char ** argv) {
                 }
             }
 
+            // 多次处理本轮输入embd.size()，直到处理完
             for (int i = 0; i < (int) embd.size(); i += params.n_batch) {
+                // n_eval作用是表示处理本轮embd的时候，本次decode处理的token数量
+                // 本轮embd一共会decode很多次，次数是embd.size()/n_batch
                 int n_eval = (int) embd.size() - i;
                 if (n_eval > params.n_batch) {
                     n_eval = params.n_batch;
@@ -677,26 +704,35 @@ int main(int argc, char ** argv) {
 
                 LOG_DBG("eval: %s\n", string_from(ctx, embd).c_str());
 
+                // ctx保存了n_past经过精简后的上下文（默认此时n_past已经很大，所以需要精简)
+                // llama_batch_get_one的作用是从embd[i]的位置开始获取n_eval个token，并返回
+                // 然后llama_decode根据已有上下文ctx和本次要处理的新的多个token来decode
+                // 如果decode没有问题，就返回0，不会进入if分支内
+                // 如果decode出现问题，就返回1，进入if分之内结束进程
                 if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval))) {
                     LOG_ERR("%s : failed to eval\n", __func__);
                     return 1;
                 }
 
+                // n_past追加上本次新处理的n_eval个token
                 n_past += n_eval;
 
                 LOG_DBG("n_past = %d\n", n_past);
                 // Display total tokens alongside total time
+                // 查看当前n_past, n_ctx
                 if (params.n_print > 0 && n_past % params.n_print == 0) {
                     LOG_DBG("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
                 }
             }
 
+            // 会话处理
             if (!embd.empty() && !path_session.empty()) {
                 session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
                 n_session_consumed = session_tokens.size();
             }
         }
 
+        // 本轮输入embd.size()已经处理完，清除
         embd.clear();
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
@@ -745,6 +781,8 @@ int main(int argc, char ** argv) {
         }
 
         // display text
+        /// TODO: 
+        // 这里是真正的生成的内容的输出，while循环每次循环是生成0个或1个token，而不是一次性处理一个prompt，一个prompt的处理需要while循环很多次
         if (input_echo && display) {
             for (auto id : embd) {
                 const std::string token_str = common_token_to_piece(ctx, id, params.special);
