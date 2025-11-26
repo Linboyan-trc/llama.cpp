@@ -114,6 +114,5 @@ data class Downloadable(val name: String, val source: Uri, val destination: File
                 }
             }
         }
-
     }
 }

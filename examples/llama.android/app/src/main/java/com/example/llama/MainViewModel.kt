@@ -18,6 +18,13 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
 
     private val tag: String? = this::class.simpleName
 
+    // 1. 可观察变量
+    // 1.1 就是说var <value_name> by mutableStateOf(listOf<initial_value>)的本质
+    // 1.1 是声明了一个listOf类型的变量<value_name>，并且设置初始值为<initial_value>
+    // 1.2 然后通过by mutableStateOf给这个变量新增一个功能，使得这个变量更新的时候，页面上显示这个变量的地方会自动刷新
+    // 1.3 private set
+    // 1.3 private set就是把set方法设置为私有方法
+    // 1.3 不像Java中要在类的方法中专门写set和get方法然后设置public或private，这里直接在变量后面加一个private set就可以，减少代码量
     var messages by mutableStateOf(listOf("Initializing..."))
         private set
 
@@ -54,31 +61,6 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
         }
     }
 
-    fun bench(pp: Int, tg: Int, pl: Int, nr: Int = 1) {
-        viewModelScope.launch {
-            try {
-                val start = System.nanoTime()
-                val warmupResult = llamaAndroid.bench(pp, tg, pl, nr)
-                val end = System.nanoTime()
-
-                messages += warmupResult
-
-                val warmup = (end - start).toDouble() / NanosPerSecond
-                messages += "Warm up time: $warmup seconds, please wait..."
-
-                if (warmup > 5.0) {
-                    messages += "Warm up took too long, aborting benchmark"
-                    return@launch
-                }
-
-                messages += llamaAndroid.bench(512, 128, 1, 3)
-            } catch (exc: IllegalStateException) {
-                Log.e(tag, "bench() failed", exc)
-                messages += exc.message!!
-            }
-        }
-    }
-
     fun load(pathToModel: String) {
         viewModelScope.launch {
             try {
@@ -95,10 +77,8 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
         message = newMessage
     }
 
-    fun clear() {
-        messages = listOf()
-    }
-
+    // 1. 追加messages
+    // 1.1 messages是listOf(<String>)
     fun log(message: String) {
         messages += message
     }

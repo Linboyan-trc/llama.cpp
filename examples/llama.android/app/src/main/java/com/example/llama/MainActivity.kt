@@ -32,6 +32,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
@@ -62,46 +69,51 @@ class MainActivity(
         }
     }
 
+    // 1. MainActivity类是程序打开之后运行的第一个类
+    // 1. 并且打开之后对MainActivity实例化之后，执行OnCreate()方法
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 1.1 不需要关心
         super.onCreate(savedInstanceState)
 
+        // 1.2 不需要关心
         StrictMode.setVmPolicy(
             VmPolicy.Builder(StrictMode.getVmPolicy())
                 .detectLeakedClosableObjects()
                 .build()
         )
 
+        // 1.3 获取内存情况，并追加在viewModel的messages中
         val free = Formatter.formatFileSize(this, availableMemory().availMem)
         val total = Formatter.formatFileSize(this, availableMemory().totalMem)
-
         viewModel.log("Current memory: $free / $total")
         viewModel.log("Downloads directory: ${getExternalFilesDir(null)}")
 
+        // 1.4 需要下载的模型列表
         val extFilesDir = getExternalFilesDir(null)
-
         val models = listOf(
-//            Downloadable(
-//                "Phi-2 7B (Q4_0, 1.6 GiB)",
-//                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf?download=true"),
-//                File(extFilesDir, "phi-2-q4_0.gguf"),
-//            ),
-//            Downloadable(
-//                "TinyLlama 1.1B (f16, 2.2 GiB)",
-//                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf?download=true"),
-//                File(extFilesDir, "tinyllama-1.1-f16.gguf"),
-//            ),
-//            Downloadable(
-//                "Phi 2 DPO (Q3_K_M, 1.48 GiB)",
-//                Uri.parse("https://huggingface.co/TheBloke/phi-2-dpo-GGUF/resolve/main/phi-2-dpo.Q3_K_M.gguf?download=true"),
-//                File(extFilesDir, "phi-2-dpo.Q3_K_M.gguf")
-//            ),
             Downloadable(
                 "TinyLlama 1.1B (int4, 669 MB)",
                 Uri.parse("https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf?download=true"),  // 本地路径也可以写成 file://
                 File(extFilesDir, "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")  // 保存/使用路径
+            ),
+            Downloadable(
+                "Qwen2.5 0.5B (int8, 676 MB)",
+                Uri.parse("https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf?download=true"),  // 本地路径也可以写成 file://
+                File(extFilesDir, "qwen2.5-0.5b-instruct-q8_0.gguf")  // 保存/使用路径
             )
         )
 
+        // 1.5 SetContent是一个函数
+        // 1.5.1 程序入口是MainActivity，并且一进来实例化之后会马上执行OnCreate()
+        // 1.5.1 一般MainActivity的OnCreate中都会有调用SetContent，因为SetContent之前的代码都是在创建或者声明变量，然后获取一些值，只有SetContent是真正在手机屏幕上展示内容
+        // 1.5.2 func在声明的时候要求传入3个参数func(arg1, arg2, arg3){}，arg3是一个函数，然后在Kotlin的语法糖中，可以写成func(arg1, arg2){arg3}，原因是arg3的代码可能很长，这样会更好看
+        // 1.5.2 如果func在声明的时候只要求传入1个参数，且这个参数是函数，就可以直接写成func{arg1}
+        // 1.5.2 如果以上情况中所有参数都不是函数，只是一个变量（比如int，double或者某个类的实例），就不可以这样
+        // 1.5.2 SetContent(arg1){}中，arg1就是一个函数，所以可以写成SetContent{arg1}
+
+        // 1.5.3 SetContent(arg1:lambda){}，所以写成SetContent{arg1}
+        // 1.5.3 LlamaAndroidTheme(arg1:lambda){}，所以写成LlamaAndroidTheme{arg1}
+        // 1.5.3 Surface(arg1, arg2, arg3:lambda){}，所以写成Surface(arg1, arg2){arg3}
         setContent {
             LlamaAndroidTheme {
                 // A surface container using the 'background' color from the theme
@@ -109,6 +121,9 @@ class MainActivity(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    // 1.6 arg3:lambda
+                    // 1.6.1 需要传入viewModel，剪切板，下载器，模型列表
+                    // 1.6.2 arg3的具体声明代码在本类之后
                     MainCompose(
                         viewModel,
                         clipboardManager,
@@ -116,7 +131,6 @@ class MainActivity(
                         models,
                     )
                 }
-
             }
         }
     }
@@ -129,13 +143,38 @@ fun MainCompose(
     dm: DownloadManager,
     models: List<Downloadable>
 ) {
+    // 1. Column(arg1, arg2, arg3:lambda){}
+    // 1.1 可以写成Column(arg1, arg2){arg3}，只不过这个arg3其实可以写很多个按钮实例，最后被打包在一起作为一个arg3整体
     Column(
         horizontalAlignment = Alignment.CenterHorizontally, // 整体水平居中
         modifier = Modifier.fillMaxSize() // 占满整个屏幕
     ) {
-        val scrollState = rememberLazyListState()
+        // // 1. 顶部AppBar
+        // Row(
+        //     verticalAlignment = Alignment.CenterVertically,
+        //     modifier = Modifier
+        //         .fillMaxWidth()
+        //         .background(Color.White)
+        //         .statusBarsPadding()
+        //         .padding(vertical = 16.dp, horizontal = 16.dp)
+        // ) {
+        //     Box(
+        //         modifier = Modifier
+        //             .size(24.dp)
+        //             .background(Color.Black, shape = RoundedCornerShape(12.dp))
+        //     )
+        //     Spacer(modifier = Modifier.width(8.dp))
+        //     Text(
+        //         text = "LlamaBot",
+        //         color = Color.Black,
+        //         style = MaterialTheme.typography.titleLarge
+        //     )
+        // }
 
+        // 2. 对话内容
+        val scrollState = rememberLazyListState()
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // 1.1 LazyColumn是真正用于显示内容
             LazyColumn(
                 state = scrollState,
                 modifier = Modifier.fillMaxSize()
@@ -159,7 +198,7 @@ fun MainCompose(
                 }
             }
 
-            // ✅ 实时滚动到底部
+            // 1.2 LaunchedEffect用于计算出对话总长度来自动给滚动到底部
             LaunchedEffect(viewModel.messages) {
                 snapshotFlow { viewModel.messages.lastOrNull() }
                     .collect { _ ->
@@ -170,32 +209,39 @@ fun MainCompose(
             }
         }
 
-        OutlinedTextField(
-            value = viewModel.message,
-            onValueChange = { viewModel.updateMessage(it) },
-            label = { Text("Message") },
-            modifier = Modifier.fillMaxWidth(0.8f) // 可选，限制宽度并居中
-        )
-
-        // 按钮 Row 居中
+        // 3. 用户输入
         Row(
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Button({ viewModel.send() }) { Text("Send") }
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(0.8f)
+        ){
+            // 3.1 获取用户的输入，并且赋值给viewModel的message属性
+            OutlinedTextField(
+                value = viewModel.message,
+                onValueChange = { viewModel.updateMessage(it) },
+                label = { Text("Message") },
+                modifier = Modifier.fillMaxWidth(0.8f), // 可选，限制宽度并居中
+                shape = RoundedCornerShape(24.dp) // 设置圆角
+            )
             Spacer(modifier = Modifier.width(8.dp))
-            Button({ viewModel.bench(8, 4, 1) }) { Text("Bench") }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button({ viewModel.clear() }) { Text("Clear") }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button({
-                viewModel.messages.joinToString("\n").let {
-                    clipboard.setPrimaryClip(ClipData.newPlainText("", it))
-                }
-            }) { Text("Copy") }
+
+            IconButton(
+                onClick = { viewModel.send() },
+                modifier = Modifier
+                    .background(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(50)
+                    )
+                    .size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowUpward,
+                    contentDescription = "Send",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
 
-        // 下载按钮 Column 居中
+        // 3. 下载按钮
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -204,5 +250,4 @@ fun MainCompose(
             }
         }
     }
-
 }
