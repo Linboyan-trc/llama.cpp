@@ -151,27 +151,27 @@ fun MainCompose(
         horizontalAlignment = Alignment.CenterHorizontally, // 整体水平居中
         modifier = Modifier.fillMaxSize() // 占满整个屏幕
     ) {
-        // // 1. 顶部AppBar
-        // Row(
-        //     verticalAlignment = Alignment.CenterVertically,
-        //     modifier = Modifier
-        //         .fillMaxWidth()
-        //         .background(Color.White)
-        //         .statusBarsPadding()
-        //         .padding(vertical = 16.dp, horizontal = 16.dp)
-        // ) {
-        //     Box(
-        //         modifier = Modifier
-        //             .size(24.dp)
-        //             .background(Color.Black, shape = RoundedCornerShape(12.dp))
-        //     )
-        //     Spacer(modifier = Modifier.width(8.dp))
-        //     Text(
-        //         text = "LlamaBot",
-        //         color = Color.Black,
-        //         style = MaterialTheme.typography.titleLarge
-        //     )
-        // }
+        // 1. 顶部AppBar
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
+                .padding(vertical = 16.dp, horizontal = 16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(13.dp)
+                    .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(6.5.dp))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "LlamaBot",
+                color = Color.Black,
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
 
         // 2. 对话内容
         val scrollState = rememberLazyListState()
