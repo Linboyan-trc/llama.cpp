@@ -3,6 +3,7 @@ package com.example.llama
 import android.app.DownloadManager
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,6 +17,7 @@ import androidx.core.database.getLongOrNull
 import androidx.core.net.toUri
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.Modifier
 import java.io.File
 
 data class Downloadable(val name: String, val source: Uri, val destination: File) {
@@ -105,7 +107,10 @@ data class Downloadable(val name: String, val source: Uri, val destination: File
                 }
             }
 
-            Button(onClick = { onClick() }, enabled = status !is Downloading) {
+            Button(
+                onClick = { onClick() },
+                modifier = Modifier.fillMaxWidth(0.9f),
+                enabled = status !is Downloading) {
                 when (status) {
                     is Downloading -> Text(text = "Downloading ${(progress * 100).toInt()}%")
                     is Downloaded -> Text("Load ${item.name}")

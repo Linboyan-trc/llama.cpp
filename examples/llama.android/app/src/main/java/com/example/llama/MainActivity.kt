@@ -168,7 +168,7 @@ fun MainCompose(
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "LlamaBot",
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.titleLarge
             )
         }
@@ -217,14 +217,14 @@ fun MainCompose(
         // 3. 用户输入
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(0.8f)
+            modifier = Modifier.fillMaxWidth(0.9f)
         ){
             // 3.1 获取用户的输入，并且赋值给viewModel的message属性
             OutlinedTextField(
                 value = viewModel.message,
                 onValueChange = { viewModel.updateMessage(it) },
                 label = { Text("Message") },
-                modifier = Modifier.fillMaxWidth(0.8f), // 可选，限制宽度并居中
+                modifier = Modifier.fillMaxWidth(0.82f), // 可选，限制宽度并居中
                 shape = RoundedCornerShape(24.dp) // 设置圆角
             )
             Spacer(modifier = Modifier.width(8.dp))
