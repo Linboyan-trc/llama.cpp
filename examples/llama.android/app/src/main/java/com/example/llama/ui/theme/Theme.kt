@@ -19,9 +19,10 @@ private val DarkColorScheme = darkColorScheme(
     // 1. 状态栏 + 对话框背景
     background = Black,
 
-    // 2. 对话文字颜色 + 消息文字颜色
+    // 2. 对话文字颜色 + 消息文字颜色 + 消息框颜色
     onTertiary = White,
-    onSurfaceVariant = White,
+    onSurfaceVariant = White.copy(alpha = 0.72f),
+    outline = White.copy(alpha = 0.72f),
 
     // 3. 按钮颜色 + 按钮文案颜色
     primary = White,
@@ -36,9 +37,10 @@ private val LightColorScheme = lightColorScheme(
     // 1. 状态栏 + 对话框背景
     background = White,
 
-    // 2. 对话文字颜色 + 消息文字颜色
+    // 2. 对话文字颜色 + 消息文字颜色 + 消息框颜色
     onTertiary = Black,
-    onSurfaceVariant = Black,
+    onSurfaceVariant = Black.copy(alpha = 0.72f),
+    outline = Black.copy(alpha = 0.72f),
 
     // 3. 按钮颜色 + 按钮文案颜色
     primary = Black,
@@ -47,16 +49,6 @@ private val LightColorScheme = lightColorScheme(
     // 3. 其他颜色
     secondary = Gray,
     tertiary = White
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
 )
 
 @Composable
