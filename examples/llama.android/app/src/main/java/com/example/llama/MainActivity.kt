@@ -39,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
@@ -117,6 +118,7 @@ class MainActivity(
         setContent {
             LlamaAndroidTheme {
                 // A surface container using the 'background' color from the theme
+                // 这个Surface的color是对话框背景的color，所以把colorScheme.background设置成白色
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -187,11 +189,14 @@ fun MainCompose(
                             .padding(horizontal = 16.dp, vertical = 4.dp),
                         horizontalArrangement = if (index % 2 == 0) Arrangement.End else Arrangement.Start
                     ) {
+                        // 这里设置文字颜色
+                        // 为LocalContentColor.current，实际上就是colorScheme.onTertiary，设置成黑色
+                        // 然后文字的背景设置为colorScheme.onTertiary，加上0.1透明度
                         Text(
                             text = message,
                             style = MaterialTheme.typography.bodyLarge.copy(color = LocalContentColor.current),
                             modifier = Modifier
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp))
                                 .padding(8.dp)
                         )
                     }
