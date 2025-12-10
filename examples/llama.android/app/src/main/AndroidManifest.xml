@@ -9,6 +9,8 @@
 
     <!--1.1 告诉安卓系统，此应用需要的权限-->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--1.2 以及规定应用图标，应用名-->
     <!--1.2.1 android:allowBackup, dataExtractionRules, fullBackupContent和数据备份有关系，和数据持久化无关，本地数据持久化要专门做-->

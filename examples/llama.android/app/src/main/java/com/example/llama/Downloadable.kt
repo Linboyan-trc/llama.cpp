@@ -97,7 +97,7 @@ data class Downloadable(val name: String, val source: Uri, val destination: File
                             setDestinationUri(item.destination.toUri())
                         }
 
-                        viewModel.log("Saving ${item.name} to ${item.destination.path}")
+                        viewModel.log("正在保存 ${item.name} to ${item.destination.path}")
                         Log.i(tag, "Saving ${item.name} to ${item.destination.path}")
 
                         val id = dm.enqueue(request)
@@ -112,10 +112,10 @@ data class Downloadable(val name: String, val source: Uri, val destination: File
                 modifier = Modifier.fillMaxWidth(0.9f),
                 enabled = status !is Downloading) {
                 when (status) {
-                    is Downloading -> Text(text = "Downloading ${(progress * 100).toInt()}%")
-                    is Downloaded -> Text("Load ${item.name}")
-                    is Ready -> Text("Download ${item.name}")
-                    is Error -> Text("Download ${item.name}")
+                    is Downloading -> Text(text = "正在下载 ${(progress * 100).toInt()}%")
+                    is Downloaded -> Text("加载 ${item.name}")
+                    is Ready -> Text("点击下载 ${item.name}")
+                    is Error -> Text("点击下载 ${item.name}")
                 }
             }
         }

@@ -1,18 +1,34 @@
 package com.example.llama
 
+import android.Manifest
 import android.app.ActivityManager
 import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.StrictMode
 import android.os.StrictMode.VmPolicy
 import android.text.format.Formatter
+import android.media.AudioRecord
+import android.media.AudioFormat
+import android.media.MediaRecorder
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.vosk.android.RecognitionListener as VoskRecognitionListener
+import org.vosk.android.SpeechService
+import org.vosk.android.StorageService
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,29 +42,38 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.getSystemService
+import com.example.llama.ui.theme.LlamaAndroidTheme
+import java.io.File
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.core.content.getSystemService
-import com.example.llama.ui.theme.LlamaAndroidTheme
-import java.io.File
 
 class MainActivity(
     activityManager: ActivityManager? = null,
@@ -62,6 +87,37 @@ class MainActivity(
     private val clipboardManager by lazy { clipboardManager ?: getSystemService<ClipboardManager>()!! }
 
     private val viewModel: MainViewModel by viewModels()
+    
+    // 麦克风权限
+    // requestPermissionLauncher是一个工具变量，是registerForActivityResult<String>类的实例化
+    // 自带.launch()方法，这个方法接受一个参数，这个参数必须是ActivityResultContracts.RequestPermission()类型，比如Manifest.permission.RECORD_AUDIO就是
+    // 然后requestPermissionLauncher的.launch()方法根据传入的权限类型去弹出弹窗，根据用户是否同意授予权限，去执行回调函数
+    // 这个回调函数的形式是 参数 -> {执行代码}，参数其实就是用户是否同意授予权限的一个Boolean值
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            viewModel.log("麦克风权限已授予")
+        } else {
+            viewModel.log("麦克风权限被拒绝")
+        }
+    }
+
+    // Vosk 语音识别相关
+    private var model: Model? = null
+    private var speechService: SpeechService? = null
+
+    fun checkAndRequestPermission() {
+        when {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED -> { }
+            else -> {
+                requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
 
     // Get a MemoryInfo object for the device's current memory status.
     private fun availableMemory(): ActivityManager.MemoryInfo {
@@ -76,6 +132,9 @@ class MainActivity(
         // 1.1 不需要关心
         super.onCreate(savedInstanceState)
 
+        // 1.2 获取麦克风权限
+        checkAndRequestPermission()
+
         // 1.2 不需要关心
         StrictMode.setVmPolicy(
             VmPolicy.Builder(StrictMode.getVmPolicy())
@@ -86,8 +145,11 @@ class MainActivity(
         // 1.3 获取内存情况，并追加在viewModel的messages中
         val free = Formatter.formatFileSize(this, availableMemory().availMem)
         val total = Formatter.formatFileSize(this, availableMemory().totalMem)
-        viewModel.log("Current memory: $free / $total")
-        viewModel.log("Downloads directory: ${getExternalFilesDir(null)}")
+        viewModel.log("空闲内存/总内存: $free / $total")
+        viewModel.log("模型下载目录: ${getExternalFilesDir(null)}")
+        
+        // 1.3.1 初始化Vosk模型
+        initVoskModel()
 
         // 1.4 需要下载的模型列表
         val extFilesDir = getExternalFilesDir(null)
@@ -131,10 +193,150 @@ class MainActivity(
                         clipboardManager,
                         downloadManager,
                         models,
+                        ::startVoskRecognition,
+                        ::stopVoskRecognition
                     )
                 }
             }
         }
+    }
+    
+    // 初始化Vosk模型
+    private fun initVoskModel() {
+        Thread {
+            try {
+                // viewModel.log("开始加载Vosk模型...")
+                // 将assets中的模型解压到应用的缓存目录
+                val modelDir = File(cacheDir, "model-en")
+                
+                // 如果缓存目录中没有模型，则从assets复制
+                if (!modelDir.exists()) {
+                    // viewModel.log("首次加载，正在复制模型文件...")
+                    modelDir.mkdirs()
+                    
+                    // 复制assets中的所有文件到缓存目录
+                    copyAssetFolder("model-en", modelDir.absolutePath)
+                }
+                
+                // 使用缓存目录中的模型创建Model对象
+                model = Model(modelDir.absolutePath)
+                // viewModel.log("Vosk模型加载成功")
+            } catch (e: Exception) {
+                viewModel.log("Vosk模型加载失败: ${e.message}")
+                e.printStackTrace()
+            }
+        }.start()
+    }
+    
+    // 递归复制assets文件夹到目标路径
+    private fun copyAssetFolder(assetPath: String, targetPath: String) {
+        try {
+            val assetList = assets.list(assetPath) ?: return
+            
+            if (assetList.isEmpty()) {
+                // 这是一个文件，复制它
+                assets.open(assetPath).use { input ->
+                    File(targetPath).outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } else {
+                // 这是一个目录，递归复制
+                val targetDir = File(targetPath)
+                targetDir.mkdirs()
+                
+                for (asset in assetList) {
+                    val assetFilePath = if (assetPath.isEmpty()) asset else "$assetPath/$asset"
+                    val targetFilePath = "$targetPath/$asset"
+                    copyAssetFolder(assetFilePath, targetFilePath)
+                }
+            }
+        } catch (e: Exception) {
+            viewModel.log("复制资源文件失败: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+    
+    // 开始Vosk语音识别
+    private fun startVoskRecognition(onResult: (String) -> Unit, onPartialResult: (String) -> Unit) {
+        if (model == null) {
+            viewModel.log("模型未加载，无法开始识别")
+            return
+        }
+        
+        try {
+            val recognizer = Recognizer(model, 16000.0f)
+            speechService = SpeechService(recognizer, 16000.0f)
+            
+            speechService?.startListening(object : VoskRecognitionListener {
+                override fun onPartialResult(hypothesis: String?) {
+                    hypothesis?.let {
+                        try {
+                            val jsonObject = JSONObject(it)
+                            val partial = jsonObject.optString("partial", "")
+                            if (partial.isNotEmpty()) {
+                                onPartialResult(partial)
+                            }
+                        } catch (e: Exception) {
+                            viewModel.log("解析部分结果失败: ${e.message}")
+                        }
+                    }
+                }
+                
+                override fun onResult(hypothesis: String?) {
+                    hypothesis?.let {
+                        try {
+                            val jsonObject = JSONObject(it)
+                            val text = jsonObject.optString("text", "")
+                            if (text.isNotEmpty()) {
+                                onResult(text)
+                            }
+                        } catch (e: Exception) {
+                            viewModel.log("解析最终结果失败: ${e.message}")
+                        }
+                    }
+                }
+                
+                override fun onFinalResult(hypothesis: String?) {
+                    hypothesis?.let {
+                        try {
+                            val jsonObject = JSONObject(it)
+                            val text = jsonObject.optString("text", "")
+                            if (text.isNotEmpty()) {
+                                onResult(text)
+                            }
+                        } catch (e: Exception) {
+                            viewModel.log("解析最终结果失败: ${e.message}")
+                        }
+                    }
+                }
+                
+                override fun onError(exception: Exception?) {
+                    viewModel.log("识别错误: ${exception?.message}")
+                }
+                
+                override fun onTimeout() {
+                    viewModel.log("识别超时")
+                }
+            })
+            
+            // viewModel.log("开始语音识别...")
+        } catch (e: Exception) {
+            viewModel.log("启动识别失败: ${e.message}")
+        }
+    }
+    
+    // 停止Vosk语音识别
+    private fun stopVoskRecognition() {
+        speechService?.stop()
+        speechService?.shutdown()
+        speechService = null
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        stopVoskRecognition()
+        model?.close()
     }
 }
 
@@ -143,7 +345,9 @@ fun MainCompose(
     viewModel: MainViewModel,
     clipboard: ClipboardManager,
     dm: DownloadManager,
-    models: List<Downloadable>
+    models: List<Downloadable>,
+    startRecognition: ((String) -> Unit, (String) -> Unit) -> Unit,
+    stopRecognition: () -> Unit
 ) {
     // 1. Column(arg1, arg2, arg3:lambda){}
     // 1.1 可以写成Column(arg1, arg2){arg3}，只不过这个arg3其实可以写很多个按钮实例，最后被打包在一起作为一个arg3整体
@@ -215,6 +419,9 @@ fun MainCompose(
         }
 
         // 3. 用户输入
+        // 3.1 语音识别 - 使用Vosk离线识别
+        var isRecording by remember { mutableStateOf(false) }
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(0.9f)
@@ -224,9 +431,54 @@ fun MainCompose(
                 value = viewModel.message,
                 onValueChange = { viewModel.updateMessage(it) },
                 label = { Text("Message") },
-                modifier = Modifier.fillMaxWidth(0.82f), // 可选，限制宽度并居中
+
+                modifier = Modifier.fillMaxWidth(0.65f), // 可选，限制宽度并居中
                 shape = RoundedCornerShape(24.dp) // 设置圆角
             )
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = if (isRecording) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.secondary,
+                        shape = RoundedCornerShape(50)
+                    )
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                // 1. 开始录音 - 使用Vosk
+                                isRecording = true
+                                // viewModel.log("开始使用Vosk离线语音识别...")
+                                
+                                startRecognition(
+                                    // onResult - 最终结果
+                                    { text ->
+                                        viewModel.updateMessage(text)
+                                        // viewModel.log("识别完成: $text")
+                                    },
+                                    // onPartialResult - 部分结果
+                                    { partial ->
+                                        viewModel.updateMessage(partial)
+                                    }
+                                )
+
+                                tryAwaitRelease()
+                                // 结束录音
+                                isRecording = false
+                                stopRecognition()
+                                // viewModel.log("停止语音识别")
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Voice Input",
+                    tint = MaterialTheme.colorScheme.onSecondary
+                )
+            }
             Spacer(modifier = Modifier.width(8.dp))
 
             IconButton(
