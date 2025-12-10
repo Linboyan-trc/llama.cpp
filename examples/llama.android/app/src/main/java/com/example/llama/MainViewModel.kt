@@ -25,7 +25,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
     // 1.3 private set
     // 1.3 private set就是把set方法设置为私有方法
     // 1.3 不像Java中要在类的方法中专门写set和get方法然后设置public或private，这里直接在变量后面加一个private set就可以，减少代码量
-    var messages by mutableStateOf(listOf("Initializing..."))
+    var messages by mutableStateOf(listOf("初始化..."))
         private set
 
     var message by mutableStateOf("")
@@ -65,7 +65,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
         viewModelScope.launch {
             try {
                 llamaAndroid.load(pathToModel)
-                messages += "Loaded $pathToModel"
+                messages += "已加载 $pathToModel"
             } catch (exc: IllegalStateException) {
                 Log.e(tag, "load() failed", exc)
                 messages += exc.message!!
